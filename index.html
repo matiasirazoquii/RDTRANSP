@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDI TRANSPORTE - Optimización de Rutas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #E3F2FD; /* Azul claro */
+            color: #0D47A1; /* Azul oscuro */
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background-color: #0D47A1; /* Azul oscuro */
+            color: white;
+            padding: 15px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #map {
+            width: 80%;
+            height: 500px;
+            margin: 20px auto;
+            border: 3px solid #0D47A1; /* Borde azul oscuro */
+            border-radius: 10px;
+        }
+
+        button {
+            background-color: #1976D2; /* Azul medio */
+            color: white;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+        }
+
+        button:hover {
+            background-color: #1565C0; /* Azul más oscuro */
+        }
+
+        #btnIrGoogleMaps {
+            display: none; /* Oculto hasta que haya una ruta */
+        }
+
+        #entregas {
+            margin-top: 30px;
+            background-color: #ffffff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        #entregas ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #entregas ul li {
+            margin: 10px 0;
+        }
+
+        #confirmarEntrega {
+            display: none;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        🚛 RDI TRANSPORTE - Optimización de Rutas
+    </header>
+
+    <p>Haz clic en el mapa para agregar puntos de entrega y luego optimiza la ruta.</p>
+    <div id="map"></div>
+    <button id="calcularRuta">Optimizar Ruta</button>
+    <button id="btnIrGoogleMaps">Ir a la siguiente entrega 📍</button>
+
+    <!-- Sección de entregas -->
+    <div id="entregas">
+        <h3>Entregas Registradas:</h3>
+        <ul id="listaEntregas"></ul>
+    </div>
+
+    <div id="confirmarEntrega">
+        <h3>¿Fue entregado con éxito?</h3>
+        <button id="entregaExito">Sí, fue entregado</button>
+        <button id="entregaFallida">No, hubo un problema</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([19.4326, -99.1332], 12); // CDMX como referencia
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var puntos = [];
+        var rutaOptimizada = [];
+
+        // Cargar entregas previas desde localStorage
+        function cargarEntregas() {
+            var entregasGuardadas = JSON.parse(localStorage.getItem('entregas')) || [];
+            var listaEntregas = document.getElementById('listaEntregas');
+            listaEntregas.innerHTML = '';
+
+            entregasGuardadas.forEach((entrega, index) => {
+                var li = document.createElement('li');
+                li.textContent = `Entrega ${index + 1}: ${entrega.estado}`;
+                listaEntregas.appendChild(li);
+            });
+        }
+
+        // Agregar puntos al hacer clic en el mapa
+        map.on('click', function (e) {
+            var marker = L.marker(e.latlng).addTo(map);
+            puntos.push([e.latlng.lat, e.latlng.lng]);
+            console.log("Punto agregado:", e.latlng.lat, e.latlng.lng);
+        });
+
+        // Función para calcular la mejor ruta
+        document.getElementById('calcularRuta').addEventListener('click', function () {
+            if (puntos.length < 2) {
+                alert("Agrega al menos dos puntos para calcular la ruta.");
+                return;
+            }
+
+            var coords = puntos.map(p => p.join(',')).join(';');
+            var url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.routes.length) {
+                        alert("No se encontró una ruta válida.");
+                        return;
+                    }
+
+                    var route = data.routes[0].geometry;
+                    rutaOptimizada = data.waypoints.map(wp => [wp.location[1], wp.location[0]]);
+                    
+                    L.geoJSON(route, { color: 'blue' }).addTo(map);
+
+                    if (rutaOptimizada.length > 1) {
+                        document.getElementById('btnIrGoogleMaps').style.display = 'inline-block';
+                    }
+                })
+                .catch(error => console.error("Error al obtener la ruta:", error));
+        });
+
+        // Función para abrir Google Maps con la siguiente entrega
+        document.getElementById('btnIrGoogleMaps').addEventListener('click', function () {
+            if (rutaOptimizada.length < 2) {
+                alert("No hay una ruta optimizada aún.");
+                return;
+            }
+
+            var siguientePunto = rutaOptimizada[1]; // Primer punto después del origen
+            var urlGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${siguientePunto[0]},${siguientePunto[1]}`;
+            window.open(urlGoogleMaps, '_blank');
+
+            // Mostrar la opción para confirmar si fue entregado
+            document.getElementById('confirmarEntrega').style.display = 'block';
+        });
+
+        // Confirmar si la entrega fue exitosa
+        document.getElementById('entregaExito').addEventListener('click', function () {
+            guardarEntrega('Entregada con éxito');
+        });
+
+        // Confirmar si la entrega falló
+        document.getElementById('entregaFallida').addEventListener('click', function () {
+            guardarEntrega('No entregada');
+        });
+
+        // Función para guardar el estado de la entrega
+        function guardarEntrega(estado) {
+            var entregas = JSON.parse(localStorage.getItem('entregas')) || [];
+            entregas.push({ estado: estado });
+            localStorage.setItem('entregas', JSON.stringify(entregas));
+
+            // Recargar las entregas y ocultar el formulario de confirmación
+            cargarEntregas();
+            document.getElementById('confirmarEntrega').style.display = 'none';
+        }
+
+        // Cargar entregas al iniciar la página
+        cargarEntregas();
+    </script>
+
+</body>
+</html>
