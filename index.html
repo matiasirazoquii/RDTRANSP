@@ -72,6 +72,18 @@
             display: none;
             margin-top: 10px;
         }
+
+        #direccion {
+            margin-top: 20px;
+        }
+
+        #direccion input {
+            padding: 10px;
+            font-size: 16px;
+            width: 70%;
+            margin-right: 10px;
+        }
+
     </style>
 </head>
 <body>
@@ -80,7 +92,11 @@
         🚛 RDI TRANSPORTE - Optimización de Rutas
     </header>
 
-    <p>Haz clic en el mapa para agregar puntos de entrega y luego optimiza la ruta.</p>
+    <p>Introduce la dirección para agregar un punto de entrega.</p>
+    <div id="direccion">
+        <input type="text" id="direccionInput" placeholder="Introduce la dirección">
+        <button id="agregarDireccion">Agregar dirección</button>
+    </div>
     <div id="map"></div>
     <button id="calcularRuta">Optimizar Ruta</button>
     <button id="btnIrGoogleMaps">Ir a la siguiente entrega 📍</button>
@@ -121,12 +137,45 @@
             });
         }
 
-        // Agregar puntos al hacer clic en el mapa
-        map.on('click', function (e) {
-            var marker = L.marker(e.latlng).addTo(map);
-            puntos.push([e.latlng.lat, e.latlng.lng]);
-            console.log("Punto agregado:", e.latlng.lat, e.latlng.lng);
+        // Función para agregar dirección manualmente
+        document.getElementById('agregarDireccion').addEventListener('click', function () {
+            var direccion = document.getElementById('direccionInput').value;
+            if (!direccion) {
+                alert('Por favor, ingresa una dirección.');
+                return;
+            }
+
+            geocodificarDireccion(direccion);
         });
+
+        // Función para convertir la dirección en coordenadas
+        function geocodificarDireccion(direccion) {
+            var url = `https://nominatim.openstreetmap.org/search?format=json&q=${direccion}`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        var lat = data[0].lat;
+                        var lon = data[0].lon;
+
+                        // Agregar el marcador al mapa
+                        var marker = L.marker([lat, lon]).addTo(map);
+                        puntos.push([lat, lon]);
+
+                        // Agregar la dirección a la lista de entregas
+                        var li = document.createElement('li');
+                        li.textContent = `Entrega en: ${direccion}`;
+                        document.getElementById('listaEntregas').appendChild(li);
+                    } else {
+                        alert('No se pudo encontrar la ubicación para esa dirección.');
+                    }
+                })
+                .catch(error => {
+                    console.error("Error al obtener la dirección:", error);
+                    alert("Hubo un error al geocodificar la dirección.");
+                });
+        }
 
         // Función para calcular la mejor ruta
         document.getElementById('calcularRuta').addEventListener('click', function () {
@@ -200,3 +249,11 @@
 
 </body>
 </html>
+
+
+
+
+
+
+
+
